@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数当てゲーム - ゲームランド</title>
+  <meta name="description" content="1〜100の中から数字を当てよう！ヒントをもとに正解を探す頭脳ゲーム。全年齢向け。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #38ef7d; }
+    .top-bar a { color:#38ef7d; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:24px 16px; }
+    .game-card { background:#16213e; border-radius:20px; padding:28px 24px; width:min(420px,100%); text-align:center; border:2px solid #11998e; box-shadow:0 0 30px rgba(56,239,125,0.1); }
+    .game-card h2 { font-size:1.4rem; margin-bottom:20px; }
+    .hint-display {
+      font-size:3rem; margin:20px 0; min-height:80px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .hint-text { font-size:1.1rem; color:#888; margin:12px 0; min-height:36px; }
+    .range-bar { height:8px; background:#0a3040; border-radius:4px; overflow:hidden; margin:16px 0; position:relative; }
+    .range-indicator { position:absolute; height:100%; background:linear-gradient(90deg,#11998e,#38ef7d); border-radius:4px; transition:all 0.5s; }
+    .input-row { display:flex; gap:8px; margin:16px 0; }
+    .num-input { flex:1; padding:14px; border-radius:12px; border:2px solid #11998e; background:#0a3040; color:#fff; font-size:1.2rem; text-align:center; outline:none; }
+    .num-input:focus { border-color:#38ef7d; }
+    .submit-btn { padding:14px 24px; border:none; border-radius:12px; background:linear-gradient(135deg,#11998e,#38ef7d); color:#fff; font-size:1rem; font-weight:900; cursor:pointer; }
+    .numpad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
+    .np-btn { padding:14px; border:none; border-radius:10px; background:#0f3460; color:#fff; font-size:1.1rem; cursor:pointer; transition:background 0.1s; }
+    .np-btn:active { background:#11998e; }
+    .history { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; justify-content:center; }
+    .hist-chip { padding:4px 10px; border-radius:12px; font-size:0.75rem; font-weight:700; }
+    .hist-low { background:rgba(79,195,247,0.2); color:#4fc3f7; border:1px solid #4fc3f7; }
+    .hist-high { background:rgba(255,107,107,0.2); color:#ff6b6b; border:1px solid #ff6b6b; }
+    .stats-row { display:flex; gap:16px; justify-content:center; margin-bottom:16px; }
+    .stat { text-align:center; }
+    .stat-v { font-size:1.2rem; font-weight:900; color:#38ef7d; }
+    .stat-l { font-size:0.65rem; color:#888; }
+    .diff-row { display:flex; gap:8px; justify-content:center; margin-bottom:16px; }
+    .d-btn { padding:6px 14px; border-radius:16px; border:2px solid #333; background:transparent; color:#888; cursor:pointer; font-size:0.8rem; }
+    .d-btn.active { border-color:#38ef7d; color:#fff; background:rgba(56,239,125,0.15); }
+    .game-btn { margin-top:12px; padding:12px 32px; border:none; border-radius:24px; background:linear-gradient(135deg,#11998e,#38ef7d); color:#222; font-size:1rem; font-weight:900; cursor:pointer; }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>🎯 数当てゲーム</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+  <div class="stats-row">
+    <div class="stat"><div class="stat-v" id="attemptsLeft">10</div><div class="stat-l">残り回数</div></div>
+    <div class="stat"><div class="stat-v" id="winCount">0</div><div class="stat-l">連勝</div></div>
+    <div class="stat"><div class="stat-v" id="bestAttempts">-</div><div class="stat-l">最少回数</div></div>
+  </div>
+  <div class="game-card">
+    <h2>🎯 数当てゲーム</h2>
+    <div class="diff-row">
+      <button class="d-btn active" onclick="setDiff(100,10,this)">かんたん<br><small>1〜100</small></button>
+      <button class="d-btn" onclick="setDiff(500,12,this)">ふつう<br><small>1〜500</small></button>
+      <button class="d-btn" onclick="setDiff(1000,10,this)">むずかしい<br><small>1〜1000</small></button>
+    </div>
+    <p style="color:#888;font-size:0.85rem;margin-bottom:8px">1〜<span id="maxNum">100</span>の中から数字を当てよう！</p>
+    <div class="hint-display" id="hintEmoji">🎯</div>
+    <div class="hint-text" id="hintText">数字を入力してください</div>
+    <div class="range-bar"><div class="range-indicator" id="rangeBar" style="left:0%;width:100%"></div></div>
+    <div id="rangeLabel" style="display:flex;justify-content:space-between;font-size:0.72rem;color:#888;margin-bottom:8px"><span id="lo">1</span><span id="hi">100</span></div>
+    <div class="input-row">
+      <input type="number" class="num-input" id="numInput" placeholder="数字を入力" min="1" max="100" onkeydown="if(event.key==='Enter')guess()">
+      <button class="submit-btn" onclick="guess()">✓</button>
+    </div>
+    <div class="numpad" id="numpad"></div>
+    <div class="history" id="history"></div>
+  </div>
+  <button class="game-btn" onclick="newGame()">🔄 新しいゲーム</button>
+</main>
+<div class="ad-banner">広告</div>
+
+<script>
+let secret, maxNum=100, maxAttempts=10, attempts, lo, hi, winCount=0, bestAttempts=Infinity, gameOver=false;
+bestAttempts=parseInt(localStorage.getItem('numguess_best')||'Infinity');
+
+function setDiff(max, att, btn) {
+  maxNum=max; maxAttempts=att;
+  document.getElementById('maxNum').textContent=max;
+  document.getElementById('numInput').max=max;
+  document.querySelectorAll('.d-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  newGame();
+}
+
+function newGame() {
+  secret=Math.floor(Math.random()*maxNum)+1;
+  attempts=0; lo=1; hi=maxNum; gameOver=false;
+  document.getElementById('attemptsLeft').textContent=maxAttempts;
+  document.getElementById('hintEmoji').textContent='🎯';
+  document.getElementById('hintText').textContent='数字を入力してください';
+  document.getElementById('numInput').value='';
+  document.getElementById('history').innerHTML='';
+  document.getElementById('lo').textContent='1';
+  document.getElementById('hi').textContent=maxNum;
+  document.getElementById('rangeBar').style.left='0%';
+  document.getElementById('rangeBar').style.width='100%';
+  buildNumpad();
+}
+
+function buildNumpad() {
+  const pad=document.getElementById('numpad');
+  pad.innerHTML='';
+  if(maxNum>100){pad.style.display='none';return;}
+  pad.style.display='grid';
+  [7,8,9,4,5,6,1,2,3].forEach(n=>{
+    const b=document.createElement('button'); b.className='np-btn'; b.textContent=n;
+    b.onclick=()=>{document.getElementById('numInput').value=(document.getElementById('numInput').value||'')+n;};
+    pad.appendChild(b);
+  });
+  const del=document.createElement('button'); del.className='np-btn'; del.textContent='⌫';
+  del.onclick=()=>{const v=document.getElementById('numInput').value;document.getElementById('numInput').value=v.slice(0,-1);};
+  const zero=document.createElement('button'); zero.className='np-btn'; zero.textContent='0';
+  zero.onclick=()=>{document.getElementById('numInput').value=(document.getElementById('numInput').value||'')+0;};
+  const ok=document.createElement('button'); ok.className='np-btn'; ok.textContent='OK'; ok.style.background='#11998e';
+  ok.onclick=guess;
+  pad.append(del, zero, ok);
+}
+
+function guess() {
+  if(gameOver) return;
+  const n=parseInt(document.getElementById('numInput').value);
+  if(isNaN(n)||n<1||n>maxNum){document.getElementById('hintText').textContent=`1〜${maxNum}の数字を入力してください`;return;}
+  document.getElementById('numInput').value='';
+  attempts++;
+  const remaining=maxAttempts-attempts;
+  document.getElementById('attemptsLeft').textContent=remaining;
+  addHistory(n, n<secret);
+
+  if(n===secret){
+    gameOver=true;
+    winCount++;
+    if(attempts<bestAttempts){bestAttempts=attempts;localStorage.setItem('numguess_best',bestAttempts);}
+    document.getElementById('winCount').textContent=winCount;
+    document.getElementById('bestAttempts').textContent=bestAttempts;
+    document.getElementById('hintEmoji').textContent='🎉';
+    document.getElementById('hintText').textContent=`正解！ ${attempts}回で当てました！`;
+    return;
+  }
+
+  if(remaining<=0){
+    gameOver=true; winCount=0; document.getElementById('winCount').textContent=0;
+    document.getElementById('hintEmoji').textContent='😢';
+    document.getElementById('hintText').textContent=`残念！正解は ${secret} でした。`;
+    return;
+  }
+
+  const diff=Math.abs(n-secret);
+  let emoji, hint;
+  if(diff<=2){emoji='🔥';hint='めちゃくちゃ近い！';}
+  else if(diff<=5){emoji='♨️';hint='すごく近い！';}
+  else if(diff<=10){emoji='🌡️';hint='近い！';}
+  else if(diff<=20){emoji='😐';hint='少し離れてる';}
+  else if(diff<=50){emoji='❄️';hint='遠い...';}
+  else{emoji='🧊';hint='かなり遠い！';}
+  hint += n<secret?' (もっと大きい ↑)':' (もっと小さい ↓)';
+
+  if(n<secret) lo=Math.max(lo,n+1);
+  else hi=Math.min(hi,n-1);
+  document.getElementById('lo').textContent=lo;
+  document.getElementById('hi').textContent=hi;
+  const leftPct=((lo-1)/maxNum)*100;
+  const widthPct=((hi-lo+1)/maxNum)*100;
+  document.getElementById('rangeBar').style.left=leftPct+'%';
+  document.getElementById('rangeBar').style.width=widthPct+'%';
+
+  document.getElementById('hintEmoji').textContent=emoji;
+  document.getElementById('hintText').textContent=hint;
+}
+
+function addHistory(n,low){
+  const chip=document.createElement('span');
+  chip.className='hist-chip '+(low?'hist-low':'hist-high');
+  chip.textContent=(low?'↑':'↓')+n;
+  document.getElementById('history').appendChild(chip);
+}
+
+newGame();
+</script>
+</body>
+</html>

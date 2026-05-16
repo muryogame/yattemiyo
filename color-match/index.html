@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>カラーマッチ - ゲームランド</title>
+  <meta name="description" content="表示された色の名前を素早く選ぶ脳トレゲーム！ストループ効果で脳を鍛えよう。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #ff6b6b; }
+    .top-bar a { color:#ff6b6b; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:20px; }
+    .game-card { background:#16213e; border-radius:20px; padding:24px; width:min(440px,100%); text-align:center; border:2px solid #2a3060; }
+    .stats { display:flex; gap:16px; justify-content:center; margin-bottom:16px; }
+    .stat { background:#0f3460; border-radius:10px; padding:8px 16px; }
+    .stat-v { font-size:1.4rem; font-weight:900; }
+    .stat-l { font-size:0.65rem; color:#888; }
+    .progress-bar { height:8px; background:#0a1030; border-radius:4px; overflow:hidden; margin-bottom:20px; }
+    .progress-fill { height:100%; border-radius:4px; transition:width 0.1s linear; }
+    .word-display {
+      font-size:clamp(2.5rem,10vw,4rem); font-weight:900; margin:24px 0;
+      min-height:80px; display:flex; align-items:center; justify-content:center;
+      text-shadow:0 2px 10px rgba(0,0,0,0.5); letter-spacing:2px;
+    }
+    .question-label { color:#888; font-size:0.85rem; margin-bottom:8px; }
+    .color-buttons { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:8px; }
+    .color-btn {
+      padding:16px; border:none; border-radius:14px; font-size:1rem; font-weight:700;
+      cursor:pointer; transition:transform 0.1s, opacity 0.1s; color:#fff;
+      text-shadow:1px 1px 3px rgba(0,0,0,0.5);
+    }
+    .color-btn:active { transform:scale(0.95); }
+    .color-btn.correct { animation:correctFlash 0.3s; }
+    .color-btn.wrong { animation:wrongFlash 0.3s; }
+    @keyframes correctFlash { 0%{opacity:1} 50%{opacity:0.5;transform:scale(1.05)} 100%{opacity:1} }
+    @keyframes wrongFlash { 0%{opacity:1} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} 100%{transform:translateX(0)} }
+    .streak { font-size:0.85rem; color:#ffd200; font-weight:700; min-height:24px; }
+    .game-btn { margin-top:16px; padding:12px 32px; border:none; border-radius:24px; background:linear-gradient(135deg,#ff6b6b,#feca57); color:#222; font-size:1rem; font-weight:900; cursor:pointer; }
+    .overlay-cm { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:50; }
+    .overlay-box { background:#16213e; border-radius:20px; padding:32px; text-align:center; border:2px solid #6c63ff; max-width:380px; width:90%; }
+    .overlay-box h2 { font-size:2rem; margin-bottom:12px; }
+    .mode-sel { display:flex; gap:8px; justify-content:center; margin-bottom:16px; }
+    .m-btn { padding:6px 14px; border-radius:16px; border:2px solid #333; background:transparent; color:#888; cursor:pointer; font-size:0.8rem; }
+    .m-btn.active { border-color:#ff6b6b; color:#fff; background:rgba(255,107,107,0.15); }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>🌈 カラーマッチ</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+<div class="game-card">
+  <div class="stats">
+    <div class="stat"><div class="stat-v" id="score" style="color:#ffd200">0</div><div class="stat-l">スコア</div></div>
+    <div class="stat"><div class="stat-v" id="highScore" style="color:#ff6b6b">0</div><div class="stat-l">ベスト</div></div>
+    <div class="stat"><div class="stat-v" id="timeLeft" style="color:#48dbfb">30</div><div class="stat-l">残り秒</div></div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:100%;background:linear-gradient(90deg,#48dbfb,#6c63ff)"></div></div>
+  <div class="mode-sel">
+    <button class="m-btn active" onclick="setMode('color',this)">色モード</button>
+    <button class="m-btn" onclick="setMode('word',this)">文字モード</button>
+    <button class="m-btn" onclick="setMode('stroop',this)">難しい</button>
+  </div>
+  <p class="question-label" id="qLabel">文字の<strong>色</strong>を選んでください</p>
+  <div class="word-display" id="wordDisp">準備</div>
+  <div class="streak" id="streakDisp"></div>
+  <div class="color-buttons" id="colorBtns"></div>
+  <button class="game-btn" onclick="startGame()">スタート！</button>
+</div>
+</main>
+<div class="ad-banner">広告</div>
+
+<div class="overlay-cm" id="overlayGame">
+  <div class="overlay-box">
+    <h2>🌈 カラーマッチ</h2>
+    <p style="color:#888;margin-bottom:16px">表示された文字の「色」をすばやく選ぼう！<br>ストループ効果で脳みそフル回転！</p>
+    <button class="game-btn" onclick="startGame()">スタート！</button>
+  </div>
+</div>
+
+<script>
+const COLORS = [
+  {name:'あか',  hex:'#ff6b6b', en:'red'},
+  {name:'あお',  hex:'#4fc3f7', en:'blue'},
+  {name:'きいろ',hex:'#ffd200', en:'yellow'},
+  {name:'みどり',hex:'#2ecc71', en:'green'},
+  {name:'むらさき',hex:'#ab47bc',en:'purple'},
+  {name:'オレンジ',hex:'#ff9f43',en:'orange'},
+];
+
+let score, highScore, streak, timeLeft, totalTime=30, running=false, timerInt, mode='color';
+highScore=parseInt(localStorage.getItem('colormatch_hs')||'0');
+document.getElementById('highScore').textContent=highScore;
+
+function setMode(m, btn) {
+  mode=m;
+  document.querySelectorAll('.m-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(mode==='stroop') document.getElementById('qLabel').innerHTML='文字の<strong>色</strong>を選んでください（文字に惑わされないで！）';
+  else if(mode==='word') document.getElementById('qLabel').innerHTML='表示された<strong>文字</strong>のボタンを押してください';
+  else document.getElementById('qLabel').innerHTML='文字の<strong>色</strong>を選んでください';
+}
+
+let correctColor, displayColor, displayWord;
+
+function newQuestion() {
+  const colorIdx=Math.floor(Math.random()*COLORS.length);
+  const wordIdx=mode==='stroop'?Math.floor(Math.random()*COLORS.length):colorIdx;
+  displayColor=COLORS[colorIdx];
+  displayWord=COLORS[wordIdx];
+  correctColor=mode==='word'?displayWord:displayColor;
+  document.getElementById('wordDisp').textContent=displayWord.name;
+  document.getElementById('wordDisp').style.color=displayColor.hex;
+  // Pick 4 options including correct
+  const options=new Set([correctColor]);
+  while(options.size<4){options.add(COLORS[Math.floor(Math.random()*COLORS.length)]);}
+  const opts=[...options].sort(()=>Math.random()-0.5);
+  const btns=document.getElementById('colorBtns');
+  btns.innerHTML='';
+  opts.forEach(c=>{
+    const b=document.createElement('button');
+    b.className='color-btn'; b.textContent=c.name;
+    b.style.background=c.hex;
+    b.onclick=()=>answer(b,c===correctColor);
+    btns.appendChild(b);
+  });
+}
+
+function answer(btn, correct) {
+  if(!running) return;
+  if(correct){
+    score+=10+streak*2; streak++;
+    btn.classList.add('correct');
+    document.getElementById('streakDisp').textContent=streak>2?`🔥 ${streak}コンボ！+${streak*2}pts`:'';
+  } else {
+    streak=0;
+    btn.classList.add('wrong');
+    document.getElementById('streakDisp').textContent='❌';
+  }
+  if(score>highScore){highScore=score;localStorage.setItem('colormatch_hs',highScore);}
+  document.getElementById('score').textContent=score;
+  document.getElementById('highScore').textContent=highScore;
+  setTimeout(()=>{btn.classList.remove('correct','wrong');if(running)newQuestion();},200);
+}
+
+function startGame() {
+  document.getElementById('overlayGame').style.display='none';
+  score=0; streak=0; timeLeft=totalTime; running=true;
+  document.getElementById('score').textContent=0;
+  document.getElementById('streakDisp').textContent='';
+  clearInterval(timerInt);
+  timerInt=setInterval(()=>{
+    timeLeft=Math.max(0,timeLeft-0.1);
+    document.getElementById('timeLeft').textContent=Math.ceil(timeLeft);
+    const pct=(timeLeft/totalTime)*100;
+    document.getElementById('progFill').style.width=pct+'%';
+    document.getElementById('progFill').style.background=pct>30?'linear-gradient(90deg,#48dbfb,#6c63ff)':'linear-gradient(90deg,#ff4444,#ff8888)';
+    if(timeLeft<=0){endGame();}
+  },100);
+  newQuestion();
+}
+
+function endGame(){
+  running=false; clearInterval(timerInt);
+  const ov=document.getElementById('overlayGame');
+  ov.style.display='flex';
+  ov.querySelector('.overlay-box').innerHTML=`<h2>⏱ 終了！</h2><p>スコア: <strong>${score}</strong></p><p>ベスト: <strong>${highScore}</strong></p><br><button class="game-btn" onclick="startGame()">もう一度！</button>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://taka55256636.github.io/yattemIyo/game/sitemap.xml

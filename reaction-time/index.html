@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>反応速度テスト - ゲームランド</title>
+  <meta name="description" content="あなたの反応速度を測定！緑になったら即クリック。世界平均と比べよう。スマホ・PC対応。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #2ecc71; }
+    .top-bar a { color:#2ecc71; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:20px; }
+    #testArea {
+      width:min(480px,94vw); height:280px; border-radius:20px; margin:16px 0;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      cursor:pointer; user-select:none; transition:background 0.1s;
+      border:3px solid #2a3060; position:relative; overflow:hidden;
+      -webkit-tap-highlight-color:transparent;
+    }
+    #testArea.waiting { background:#1e3060; }
+    #testArea.ready { background:#16213e; }
+    #testArea.go { background:#27ae60; }
+    #testArea.early { background:#c0392b; }
+    #testArea h2 { font-size:clamp(1.4rem,5vw,2rem); font-weight:900; text-align:center; pointer-events:none; }
+    #testArea p { color:rgba(255,255,255,0.7); font-size:0.9rem; margin-top:8px; text-align:center; pointer-events:none; }
+    #testArea .big-num { font-size:clamp(3rem,12vw,5rem); font-weight:900; font-variant-numeric:tabular-nums; }
+    .results { width:min(480px,94vw); }
+    .result-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:16px; }
+    .result-box { background:#16213e; border-radius:14px; padding:16px; text-align:center; border:1px solid #2a3060; }
+    .result-val { font-size:1.6rem; font-weight:900; }
+    .result-label { font-size:0.72rem; color:#888; margin-top:4px; }
+    .history-list { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+    .h-chip { padding:4px 10px; border-radius:10px; background:#0f3460; font-size:0.78rem; font-variant-numeric:tabular-nums; }
+    .h-chip.best { border:1px solid #2ecc71; color:#2ecc71; }
+    .world-compare { background:#16213e; border-radius:14px; padding:16px; margin-bottom:12px; border:1px solid #2a3060; }
+    .compare-bar { height:10px; background:#0a1030; border-radius:5px; overflow:hidden; margin:8px 0; }
+    .compare-fill { height:100%; border-radius:5px; transition:width 0.5s; }
+    .game-btn { padding:12px 32px; border:none; border-radius:24px; background:linear-gradient(135deg,#27ae60,#2ecc71); color:#fff; font-size:1rem; font-weight:700; cursor:pointer; width:100%; }
+    .rounds { display:flex; gap:8px; justify-content:center; margin-bottom:8px; }
+    .r-btn { padding:6px 14px; border-radius:16px; border:2px solid #333; background:transparent; color:#888; cursor:pointer; font-size:0.8rem; }
+    .r-btn.active { border-color:#2ecc71; color:#fff; background:rgba(46,204,113,0.15); }
+    .hint { color:#888; font-size:0.78rem; text-align:center; margin-top:8px; }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>⚡ 反応速度テスト</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+  <div class="rounds">
+    <button class="r-btn active" onclick="setRounds(5,this)">5回</button>
+    <button class="r-btn" onclick="setRounds(10,this)">10回</button>
+  </div>
+  <div id="testArea" class="waiting" onclick="handleClick()">
+    <h2 id="mainText">クリックしてスタート！</h2>
+    <p id="subText">あなたの反応速度を測定</p>
+  </div>
+  <div class="results">
+    <div class="result-grid">
+      <div class="result-box"><div class="result-val" id="lastTime" style="color:#2ecc71">--</div><div class="result-label">最新 (ms)</div></div>
+      <div class="result-box"><div class="result-val" id="bestTime" style="color:#ffd200">--</div><div class="result-label">ベスト (ms)</div></div>
+      <div class="result-box"><div class="result-val" id="avgTime" style="color:#48dbfb">--</div><div class="result-label">平均 (ms)</div></div>
+      <div class="result-box"><div class="result-val" id="roundNum" style="color:#ab47bc">0 / 5</div><div class="result-label">完了ラウンド</div></div>
+    </div>
+    <div class="history-list" id="histList"></div>
+    <div class="world-compare" id="compareBox" style="display:none">
+      <p style="font-size:0.85rem;margin-bottom:6px">🌍 世界平均との比較（約250ms）</p>
+      <div class="compare-bar"><div class="compare-fill" id="compareFill" style="background:#2ecc71"></div></div>
+      <p id="compareText" style="font-size:0.82rem;color:#888"></p>
+    </div>
+    <button class="game-btn" id="resetBtn" onclick="reset()" style="display:none">🔄 もう一度チャレンジ</button>
+  </div>
+  <p class="hint">緑になったら即クリック！フライングは×。</p>
+</main>
+<div class="ad-banner">広告</div>
+
+<script>
+let state='idle', startTime, waitTimer, times=[], totalRounds=5, currentRound=0;
+const best=parseInt(localStorage.getItem('react_best')||'9999');
+let bestTime=best<9999?best:null;
+
+function setRounds(n,btn){
+  totalRounds=n;
+  document.querySelectorAll('.r-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  reset();
+}
+
+function reset(){
+  clearTimeout(waitTimer); state='idle'; times=[]; currentRound=0;
+  const area=document.getElementById('testArea');
+  area.className='waiting';
+  document.getElementById('mainText').textContent='クリックしてスタート！';
+  document.getElementById('subText').textContent='あなたの反応速度を測定';
+  document.getElementById('histList').innerHTML='';
+  document.getElementById('compareBox').style.display='none';
+  document.getElementById('resetBtn').style.display='none';
+  document.getElementById('roundNum').textContent=`0 / ${totalRounds}`;
+  document.getElementById('lastTime').textContent='--';
+  document.getElementById('avgTime').textContent='--';
+}
+
+function handleClick(){
+  if(state==='idle'){
+    startWait();
+  } else if(state==='waiting'){
+    earlyClick();
+  } else if(state==='go'){
+    recordTime();
+  } else if(state==='done'){
+    return;
+  }
+}
+
+function startWait(){
+  state='waiting';
+  const area=document.getElementById('testArea');
+  area.className='ready';
+  document.getElementById('mainText').textContent='待て...';
+  document.getElementById('subText').textContent='緑になったらクリック！';
+  const delay=1500+Math.random()*3000;
+  waitTimer=setTimeout(showGo, delay);
+}
+
+function showGo(){
+  state='go';
+  startTime=performance.now();
+  const area=document.getElementById('testArea');
+  area.className='go';
+  document.getElementById('mainText').textContent='今だ！';
+  document.getElementById('subText').textContent='クリック！';
+}
+
+function earlyClick(){
+  clearTimeout(waitTimer);
+  state='idle';
+  const area=document.getElementById('testArea');
+  area.className='early';
+  document.getElementById('mainText').textContent='フライング！😅';
+  document.getElementById('subText').textContent='もう一度クリックしてリトライ';
+  setTimeout(()=>{area.className='waiting';document.getElementById('mainText').textContent='待て...';startWait();},800);
+}
+
+function recordTime(){
+  const t=Math.round(performance.now()-startTime);
+  times.push(t);
+  currentRound++;
+  document.getElementById('lastTime').textContent=t;
+  document.getElementById('roundNum').textContent=`${currentRound} / ${totalRounds}`;
+  const avg=Math.round(times.reduce((a,b)=>a+b,0)/times.length);
+  const bst=Math.min(...times);
+  document.getElementById('avgTime').textContent=avg;
+  document.getElementById('bestTime').textContent=bst;
+  if(!bestTime||bst<bestTime){bestTime=bst;localStorage.setItem('react_best',bst);}
+  addHistChip(t,bst);
+  const area=document.getElementById('testArea');
+  if(currentRound>=totalRounds){
+    showFinalResult(avg,bst);
+  } else {
+    state='idle';
+    area.className='waiting';
+    document.getElementById('mainText').textContent=`あと ${totalRounds-currentRound} 回！`;
+    document.getElementById('subText').textContent='クリックして続ける';
+  }
+}
+
+function addHistChip(t, bst){
+  const chip=document.createElement('span');
+  chip.className='h-chip'+(t===bst?' best':'');
+  chip.textContent=t+'ms';
+  document.getElementById('histList').appendChild(chip);
+}
+
+function showFinalResult(avg, bst){
+  state='done';
+  const area=document.getElementById('testArea');
+  area.className='ready';
+  const WORLD_AVG=250;
+  const label=bst<200?'⚡ 超人的！':bst<230?'🌟 速い！':bst<270?'😊 平均的':bst<350?'😅 ちょい遅め':'🐌 もっと練習！';
+  document.getElementById('mainText').textContent=label;
+  document.getElementById('subText').textContent=`ベスト ${bst}ms`;
+  const pct=Math.min(100,Math.max(10,(WORLD_AVG/(bst))*50));
+  const compare=document.getElementById('compareBox');
+  compare.style.display='block';
+  document.getElementById('compareFill').style.width=pct+'%';
+  document.getElementById('compareFill').style.background=bst<WORLD_AVG?'#2ecc71':'#e74c3c';
+  document.getElementById('compareText').textContent=bst<WORLD_AVG?`世界平均(${WORLD_AVG}ms)より${WORLD_AVG-bst}ms速い！`:`世界平均(${WORLD_AVG}ms)より${bst-WORLD_AVG}ms遅い。もっと練習！`;
+  document.getElementById('resetBtn').style.display='block';
+}
+</script>
+</body>
+</html>

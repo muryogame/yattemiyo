@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>マインスイーパー - ゲームランド</title>
+  <meta name="description" content="地雷を避けてすべてのマスを開こう！定番マインスイーパーゲーム。難易度3段階。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #71b280; }
+    .top-bar a { color:#71b280; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:16px; }
+    .topbar2 { display:flex; gap:16px; align-items:center; margin-bottom:12px; }
+    .info-box { background:#16213e; border-radius:10px; padding:8px 16px; text-align:center; border:1px solid #2a3060; }
+    .info-label { font-size:0.65rem; color:#888; }
+    .info-val { font-size:1.3rem; font-weight:900; color:#71b280; font-variant-numeric:tabular-nums; }
+    .diff-btns { display:flex; gap:8px; margin-bottom:10px; }
+    .d-btn { padding:6px 14px; border-radius:16px; border:2px solid #333; background:transparent; color:#888; cursor:pointer; font-size:0.8rem; }
+    .d-btn.active { border-color:#71b280; color:#fff; background:rgba(113,178,128,0.2); }
+    #mineGrid {
+      display:grid; gap:3px; padding:10px; background:#134e5e; border-radius:10px;
+      border:2px solid #71b280; box-shadow:0 0 20px rgba(113,178,128,0.2);
+      max-width:calc(100vw - 32px); overflow:auto;
+    }
+    .cell {
+      width:32px; height:32px; border:none; border-radius:4px;
+      background:#1a6070; cursor:pointer; font-size:0.9rem; font-weight:700;
+      display:flex; align-items:center; justify-content:center;
+      transition:background 0.1s; user-select:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .cell:hover:not(.open):not(.flagged) { background:#2a8090; }
+    .cell.open { background:#0a3040; cursor:default; color:#fff; }
+    .cell.mine-hit { background:#cc0000; }
+    .cell.flagged { background:#1a6070; }
+    .game-btn { margin:12px 0; padding:10px 28px; border:none; border-radius:24px; background:linear-gradient(135deg,#134e5e,#71b280); color:#fff; font-size:0.95rem; font-weight:700; cursor:pointer; }
+    .hint { color:#888; font-size:0.78rem; text-align:center; }
+    .num-1 { color:#4fc3f7; }
+    .num-2 { color:#81c784; }
+    .num-3 { color:#ef5350; }
+    .num-4 { color:#7986cb; }
+    .num-5 { color:#ff8a65; }
+    .num-6 { color:#26c6da; }
+    .num-7 { color:#ab47bc; }
+    .num-8 { color:#90a4ae; }
+    .toast { position:fixed; top:80px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:12px 24px; border-radius:24px; font-size:1rem; font-weight:700; z-index:100; display:none; box-shadow:0 4px 20px rgba(0,0,0,0.5); }
+    .result-banner { background:#16213e; border-radius:12px; padding:12px 24px; text-align:center; margin-bottom:10px; border:2px solid #71b280; display:none; }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>💣 マインスイーパー</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+  <div class="result-banner" id="result"></div>
+  <div class="topbar2">
+    <div class="info-box"><div class="info-label">💣 地雷</div><div class="info-val" id="mineCount">10</div></div>
+    <div class="info-box"><div class="info-label">⏱ 時間</div><div class="info-val" id="timerDisp">0</div></div>
+  </div>
+  <div class="diff-btns">
+    <button class="d-btn active" onclick="initGame(9,9,10,this)">かんたん</button>
+    <button class="d-btn" onclick="initGame(16,16,40,this)">ふつう</button>
+    <button class="d-btn" onclick="initGame(16,30,99,this)">むずかしい</button>
+  </div>
+  <div id="mineGrid"></div>
+  <button class="game-btn" onclick="initGame(rows,cols,mines,null)">🔄 リセット</button>
+  <p class="hint">左クリック/タップ: マスを開く ／ 右クリック/長押し: 旗を立てる</p>
+</main>
+<div class="ad-banner">広告</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let rows=9, cols=9, mines=10;
+let board=[], revealed=[], flagged=[], gameOver=false, firstClick=true, timer=0, timerInt;
+
+function initGame(r,c,m,btn) {
+  rows=r; cols=c; mines=m;
+  board=[]; revealed=[]; flagged=[]; gameOver=false; firstClick=true;
+  clearInterval(timerInt); timer=0; document.getElementById('timerDisp').textContent='0';
+  document.getElementById('mineCount').textContent=mines;
+  document.getElementById('result').style.display='none';
+  if(btn){document.querySelectorAll('.d-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+  for(let i=0;i<rows;i++){board.push(Array(cols).fill(0));revealed.push(Array(cols).fill(false));flagged.push(Array(cols).fill(false));}
+  render();
+}
+
+function placeMines(sr,sc) {
+  let placed=0;
+  while(placed<mines){const r=Math.floor(Math.random()*rows),c=Math.floor(Math.random()*cols);
+    if(board[r][c]===-1||(Math.abs(r-sr)<=1&&Math.abs(c-sc)<=1))continue;
+    board[r][c]=-1;placed++;
+  }
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    if(board[r][c]===-1)continue;
+    let cnt=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const nr=r+dr,nc=c+dc;if(nr>=0&&nr<rows&&nc>=0&&nc<cols&&board[nr][nc]===-1)cnt++;}
+    board[r][c]=cnt;
+  }
+}
+
+function reveal(r,c) {
+  if(r<0||r>=rows||c<0||c>=cols||revealed[r][c]||flagged[r][c])return;
+  revealed[r][c]=true;
+  if(board[r][c]===0){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)reveal(r+dr,c+dc);}
+}
+
+function click(r,c) {
+  if(gameOver||revealed[r][c]||flagged[r][c])return;
+  if(firstClick){firstClick=false;placeMines(r,c);timerInt=setInterval(()=>{timer++;document.getElementById('timerDisp').textContent=timer;},1000);}
+  if(board[r][c]===-1){
+    gameOver=true; clearInterval(timerInt);
+    revealed[r][c]=true; render();
+    document.querySelectorAll('.cell').forEach((el,i)=>{const cr=Math.floor(i/cols),cc=i%cols;if(board[cr][cc]===-1)revealed[cr][cc]=true;});
+    render();
+    showResult('💥 地雷を踏んだ！',false);
+    return;
+  }
+  reveal(r,c);
+  checkWin();
+  render();
+}
+
+function toggleFlag(r,c) {
+  if(gameOver||revealed[r][c])return;
+  flagged[r][c]=!flagged[r][c];
+  const flagCount=flagged.flat().filter(Boolean).length;
+  document.getElementById('mineCount').textContent=mines-flagCount;
+  render();
+}
+
+function checkWin() {
+  const total=rows*cols, open=revealed.flat().filter(Boolean).length;
+  if(open===total-mines){gameOver=true;clearInterval(timerInt);showResult(`🎉 クリア！ ${timer}秒`,true);}
+}
+
+function showResult(msg,win) {
+  const el=document.getElementById('result');
+  el.textContent=msg; el.style.display='block';
+  el.style.borderColor=win?'#71b280':'#cc0000';
+}
+
+function render() {
+  const grid=document.getElementById('mineGrid');
+  grid.style.gridTemplateColumns=`repeat(${cols},32px)`;
+  grid.innerHTML='';
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const div=document.createElement('div'); div.className='cell';
+    const v=board[r][c];
+    if(revealed[r][c]){
+      div.classList.add('open');
+      if(v===-1){div.textContent='💣';div.classList.add('mine-hit');}
+      else if(v>0){div.textContent=v;div.classList.add(`num-${v}`);}
+    } else if(flagged[r][c]){div.textContent='🚩';div.classList.add('flagged');}
+    div.addEventListener('click',()=>click(r,c));
+    div.addEventListener('contextmenu',e=>{e.preventDefault();toggleFlag(r,c);});
+    let longPress;
+    div.addEventListener('touchstart',()=>{longPress=setTimeout(()=>toggleFlag(r,c),500);},{passive:true});
+    div.addEventListener('touchend',()=>clearTimeout(longPress),{passive:true});
+    grid.appendChild(div);
+  }
+}
+
+initGame(9,9,10,null);
+</script>
+</body>
+</html>

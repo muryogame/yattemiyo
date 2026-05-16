@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スピードクリック - ゲームランド</title>
+  <meta name="description" content="制限時間内に的をクリック！反応速度と正確さを競おう。スマホ・PC対応。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #ffd200; }
+    .top-bar a { color:#ffd200; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:16px; }
+    .scoreboard { display:flex; gap:16px; margin-bottom:12px; }
+    .sb { background:#16213e; border-radius:10px; padding:8px 16px; text-align:center; border:1px solid #2a3060; }
+    .sb-label { font-size:0.65rem; color:#888; }
+    .sb-val { font-size:1.3rem; font-weight:900; color:#ffd200; }
+    #arena {
+      width:min(480px,94vw); height:360px; background:#0d0d1a;
+      border:3px solid #ffd200; border-radius:12px; position:relative;
+      cursor:crosshair; overflow:hidden; box-shadow:0 0 20px rgba(255,210,0,0.2);
+    }
+    .target {
+      position:absolute; border-radius:50%; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:1.2rem; animation:pulse 0.3s ease-out;
+      box-shadow:0 0 15px rgba(255,210,0,0.5);
+    }
+    @keyframes pulse { from{transform:scale(0)} to{transform:scale(1)} }
+    .miss-flash { position:absolute; inset:0; background:rgba(255,0,0,0.1); pointer-events:none; opacity:0; animation:flash 0.3s; }
+    @keyframes flash { 0%{opacity:1} 100%{opacity:0} }
+    .progress-bar { width:min(480px,94vw); height:8px; background:#1a1a2e; border-radius:4px; margin-bottom:8px; overflow:hidden; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,#ffd200,#f7971e); border-radius:4px; transition:width 0.1s linear; }
+    .game-btn { margin-top:12px; padding:12px 32px; border:none; border-radius:24px; background:linear-gradient(135deg,#f7971e,#ffd200); color:#222; font-size:1rem; font-weight:900; cursor:pointer; }
+    .mode-sel { display:flex; gap:8px; margin-bottom:10px; }
+    .m-btn { padding:6px 14px; border-radius:16px; border:2px solid #333; background:transparent; color:#888; cursor:pointer; font-size:0.8rem; }
+    .m-btn.active { border-color:#ffd200; color:#fff; background:rgba(255,210,0,0.15); }
+    .overlay-sp { position:absolute; inset:0; background:rgba(0,0,0,0.8); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; border-radius:10px; }
+    .overlay-sp h2 { font-size:2rem; }
+    .hint { color:#888; font-size:0.8rem; margin-top:8px; text-align:center; }
+    .combo { position:absolute; top:8px; right:12px; font-size:0.8rem; color:#ffd200; font-weight:700; }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>⚡ スピードクリック</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+  <div class="scoreboard">
+    <div class="sb"><div class="sb-label">スコア</div><div class="sb-val" id="score">0</div></div>
+    <div class="sb"><div class="sb-label">ハイスコア</div><div class="sb-val" id="highScore">0</div></div>
+    <div class="sb"><div class="sb-label">コンボ</div><div class="sb-val" id="combo">0</div></div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:100%"></div></div>
+  <div id="arena">
+    <div class="overlay-sp" id="overlayS">
+      <h2>⚡ スピード<br>クリック</h2>
+      <p style="color:#888">的をクリックしてポイントゲット！</p>
+      <button class="game-btn" onclick="startGame()">スタート！</button>
+    </div>
+    <div class="combo" id="comboDisp"></div>
+  </div>
+  <div class="mode-sel">
+    <button class="m-btn active" onclick="setMode(30,this)">30秒 ノーマル</button>
+    <button class="m-btn" onclick="setMode(60,this)">60秒 エンドレス</button>
+    <button class="m-btn" onclick="setMode(15,this)">15秒 スプリント</button>
+  </div>
+  <button class="game-btn" onclick="startGame()">🔄 リスタート</button>
+  <p class="hint">的をなるべく速くクリック！コンボで得点アップ！外したらコンボリセット。</p>
+</main>
+<div class="ad-banner">広告</div>
+
+<script>
+const arena = document.getElementById('arena');
+let score, highScore, combo, timeLeft, totalTime, running, spawnTimer, countdownTimer;
+highScore = parseInt(localStorage.getItem('speedclick_hs')||'0');
+document.getElementById('highScore').textContent = highScore;
+totalTime = 30;
+
+function setMode(t, btn) {
+  totalTime = t;
+  document.querySelectorAll('.m-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function startGame() {
+  score=0; combo=0; timeLeft=totalTime; running=true;
+  document.getElementById('score').textContent=0;
+  document.getElementById('combo').textContent=0;
+  document.getElementById('overlayS').style.display='none';
+  clearInterval(spawnTimer); clearInterval(countdownTimer);
+  arena.querySelectorAll('.target').forEach(t=>t.remove());
+  spawnTarget(); spawnTimer=setInterval(()=>{if(running)spawnTarget();},1200);
+  countdownTimer=setInterval(tick,100);
+}
+
+function tick() {
+  timeLeft=Math.max(0,timeLeft-0.1);
+  const pct=(timeLeft/totalTime)*100;
+  document.getElementById('progressFill').style.width=pct+'%';
+  document.getElementById('progressFill').style.background=pct>30?'linear-gradient(90deg,#ffd200,#f7971e)':'linear-gradient(90deg,#ff4444,#ff8888)';
+  if(timeLeft<=0){endGame();}
+}
+
+function spawnTarget() {
+  const size=Math.random()*40+30;
+  const target=document.createElement('div');
+  target.className='target';
+  target.style.width=size+'px'; target.style.height=size+'px';
+  target.style.left=Math.random()*(arena.clientWidth-size)+'px';
+  target.style.top=Math.random()*(arena.clientHeight-size-30)+'px';
+  const hue=Math.floor(Math.random()*360);
+  target.style.background=`hsl(${hue},80%,55%)`;
+  target.textContent=combo>4?'🌟':combo>2?'⭐':'🎯';
+  target.style.fontSize=(size*0.45)+'px';
+  target.addEventListener('click',()=>hitTarget(target,size));
+  target.addEventListener('touchstart',e=>{e.preventDefault();hitTarget(target,size);},{passive:false});
+  arena.appendChild(target);
+  setTimeout(()=>{if(target.parentNode){target.remove();missTarget();}},2000-Math.min(timeLeft/totalTime*500,500));
+}
+
+function hitTarget(target,size) {
+  if(!running)return;
+  target.remove(); combo++;
+  const pts=Math.max(10,Math.round((60/size)*10))*Math.max(1,Math.floor(combo/3));
+  score+=pts;
+  if(score>highScore){highScore=score;localStorage.setItem('speedclick_hs',highScore);}
+  document.getElementById('score').textContent=score;
+  document.getElementById('highScore').textContent=highScore;
+  document.getElementById('combo').textContent=combo;
+  document.getElementById('comboDisp').textContent=combo>1?`🔥 ${combo}コンボ！`:'';
+}
+
+function missTarget() {
+  combo=0; document.getElementById('combo').textContent=0;
+  document.getElementById('comboDisp').textContent='';
+  const flash=document.createElement('div'); flash.className='miss-flash'; arena.appendChild(flash);
+  setTimeout(()=>flash.remove(),300);
+}
+
+function endGame() {
+  running=false; clearInterval(spawnTimer); clearInterval(countdownTimer);
+  arena.querySelectorAll('.target').forEach(t=>t.remove());
+  const ov=document.getElementById('overlayS');
+  ov.style.display='flex';
+  ov.innerHTML=`<h2>⏱ タイムアップ！</h2><p>スコア: <strong>${score}</strong></p><p>ハイスコア: <strong>${highScore}</strong></p><button class="game-btn" onclick="startGame()">もう一度！</button>`;
+}
+</script>
+</body>
+</html>

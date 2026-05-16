@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ポンゲーム - ゲームランド</title>
+  <meta name="description" content="懐かしのポンゲーム！CPUに負けないようにボールを打ち返そう。スマホ・PC対応。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #48dbfb; }
+    .top-bar a { color:#48dbfb; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:16px; }
+    canvas { border:3px solid #48dbfb; border-radius:8px; display:block; max-width:100%; box-shadow:0 0 20px rgba(72,219,251,0.3); }
+    .canvas-wrap { position:relative; }
+    .overlay-p { position:absolute; inset:0; background:rgba(0,0,0,0.8); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; border-radius:6px; }
+    .overlay-p h2 { font-size:2rem; }
+    .game-btn { padding:12px 32px; border:none; border-radius:24px; background:linear-gradient(135deg,#48dbfb,#0984e3); color:#fff; font-size:1rem; font-weight:700; cursor:pointer; }
+    .diff-sel { display:flex; gap:8px; margin:10px 0; }
+    .d-btn { padding:6px 14px; border-radius:16px; border:2px solid #333; background:transparent; color:#888; cursor:pointer; font-size:0.8rem; }
+    .d-btn.active { border-color:#48dbfb; color:#fff; background:rgba(72,219,251,0.15); }
+    .touch-controls { display:flex; gap:12px; margin-top:12px; }
+    .t-btn { padding:16px 24px; border:none; border-radius:12px; background:#16213e; color:#fff; font-size:1.4rem; cursor:pointer; border:2px solid #2a3060; }
+    .t-btn:active { background:#48dbfb; color:#000; }
+    .hint { color:#888; font-size:0.78rem; margin-top:8px; text-align:center; }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>🏓 ポンゲーム</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+  <div class="diff-sel">
+    <button class="d-btn active" onclick="setDiff(2,this)">かんたん</button>
+    <button class="d-btn" onclick="setDiff(4,this)">ふつう</button>
+    <button class="d-btn" onclick="setDiff(6,this)">むずかしい</button>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="gc" width="480" height="320"></canvas>
+    <div class="overlay-p" id="ov">
+      <h2>🏓 ポン</h2>
+      <p style="color:#888">マウス/タッチでパドルを操作！</p>
+      <button class="game-btn" onclick="startGame()">スタート！</button>
+    </div>
+  </div>
+  <div class="touch-controls">
+    <button class="t-btn" id="upBtn">⬆</button>
+    <button class="t-btn" id="downBtn">⬇</button>
+  </div>
+  <p class="hint">マウスかタッチ、または矢印キーでパドル操作。11点先取で勝利！</p>
+</main>
+<div class="ad-banner">広告</div>
+
+<script>
+const canvas=document.getElementById('gc'), ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+const PW=10, PH=80, BALL_R=8;
+
+let p1={x:10, y:H/2-PH/2, vy:0, score:0};
+let cpu={x:W-20, y:H/2-PH/2, vy:0, score:0};
+let ball={x:W/2, y:H/2, vx:-4, vy:2};
+let running=false, animId, cpuSpeed=4;
+
+function setDiff(s,btn){
+  cpuSpeed=s;
+  document.querySelectorAll('.d-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function startGame(){
+  p1.score=0; cpu.score=0; running=true;
+  document.getElementById('ov').style.display='none';
+  resetBall(); loop();
+}
+
+function resetBall(){
+  ball={x:W/2,y:H/2,vx:(Math.random()>0.5?1:-1)*4.5,vy:(Math.random()-0.5)*4};
+}
+
+function loop(){
+  update(); draw();
+  animId=requestAnimationFrame(loop);
+}
+
+function update(){
+  if(!running)return;
+  ball.x+=ball.vx; ball.y+=ball.vy;
+  // Top/bottom
+  if(ball.y-BALL_R<0){ball.y=BALL_R;ball.vy*=-1;}
+  if(ball.y+BALL_R>H){ball.y=H-BALL_R;ball.vy*=-1;}
+  // Player paddle
+  if(ball.vx<0&&ball.x-BALL_R<=p1.x+PW&&ball.x-BALL_R>=p1.x&&ball.y>=p1.y&&ball.y<=p1.y+PH){
+    ball.vx=Math.abs(ball.vx)*1.05;
+    ball.vy+=((ball.y-(p1.y+PH/2))/(PH/2))*3;
+    ball.vx=Math.min(ball.vx,10);
+  }
+  // CPU paddle
+  if(ball.vx>0&&ball.x+BALL_R>=cpu.x&&ball.x+BALL_R<=cpu.x+PW&&ball.y>=cpu.y&&ball.y<=cpu.y+PH){
+    ball.vx=-Math.abs(ball.vx)*1.05;
+    ball.vy+=((ball.y-(cpu.y+PH/2))/(PH/2))*3;
+    ball.vx=Math.max(ball.vx,-10);
+  }
+  // CPU AI
+  const cpuCenter=cpu.y+PH/2;
+  if(cpuCenter<ball.y-5)cpu.y=Math.min(H-PH,cpu.y+cpuSpeed);
+  else if(cpuCenter>ball.y+5)cpu.y=Math.max(0,cpu.y-cpuSpeed);
+  // Player
+  p1.y=Math.max(0,Math.min(H-PH,p1.y+p1.vy));
+  // Score
+  if(ball.x<0){cpu.score++;checkWin();resetBall();}
+  if(ball.x>W){p1.score++;checkWin();resetBall();}
+}
+
+function checkWin(){
+  if(p1.score>=11||cpu.score>=11){
+    running=false; cancelAnimationFrame(animId);
+    const win=p1.score>=11;
+    const ov=document.getElementById('ov');
+    ov.style.display='flex';
+    ov.innerHTML=`<h2>${win?'🎉 勝利！':'😢 負け...'}</h2><p>${p1.score} - ${cpu.score}</p><button class="game-btn" onclick="startGame()">もう一度！</button>`;
+  }
+}
+
+function draw(){
+  ctx.fillStyle='#0d0d1a'; ctx.fillRect(0,0,W,H);
+  ctx.setLineDash([8,8]); ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke();
+  ctx.setLineDash([]);
+  // Scores
+  ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.font='bold 36px monospace'; ctx.textAlign='center';
+  ctx.fillText(p1.score,W/4,44); ctx.fillText(cpu.score,3*W/4,44);
+  ctx.font='10px sans-serif'; ctx.fillStyle='#888';
+  ctx.fillText('あなた',W/4,58); ctx.fillText('CPU',3*W/4,58);
+  // Paddles
+  const drawPaddle=(p,color)=>{
+    const g=ctx.createLinearGradient(p.x,p.y,p.x+PW,p.y);
+    g.addColorStop(0,color); g.addColorStop(1,'rgba(255,255,255,0.2)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.roundRect(p.x,p.y,PW,PH,4); ctx.fill();
+    const glow=ctx.createLinearGradient(p.x,p.y,p.x,p.y+PH);
+    glow.addColorStop(0,'rgba(255,255,255,0.3)'); glow.addColorStop(1,'transparent');
+    ctx.fillStyle=glow; ctx.beginPath(); ctx.roundRect(p.x,p.y,PW,10,4); ctx.fill();
+  };
+  drawPaddle(p1,'#48dbfb'); drawPaddle(cpu,'#ff6b6b');
+  // Ball glow
+  const bg=ctx.createRadialGradient(ball.x,ball.y,0,ball.x,ball.y,BALL_R*3);
+  bg.addColorStop(0,'rgba(255,255,255,0.3)'); bg.addColorStop(1,'transparent');
+  ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(ball.x,ball.y,BALL_R*3,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ball.x,ball.y,BALL_R,0,Math.PI*2); ctx.fill();
+}
+
+// Mouse
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  p1.y=(e.clientY-r.top)*(H/r.height)-PH/2;
+});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect();
+  p1.y=(e.touches[0].clientY-r.top)*(H/r.height)-PH/2;
+},{passive:false});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'){e.preventDefault();p1.vy=-7;}
+  if(e.key==='ArrowDown'){e.preventDefault();p1.vy=7;}
+});
+document.addEventListener('keyup',e=>{if(e.key==='ArrowUp'||e.key==='ArrowDown')p1.vy=0;});
+
+// Touch buttons
+document.getElementById('upBtn').addEventListener('touchstart',e=>{e.preventDefault();p1.vy=-7;},{passive:false});
+document.getElementById('downBtn').addEventListener('touchstart',e=>{e.preventDefault();p1.vy=7;},{passive:false});
+document.getElementById('upBtn').addEventListener('touchend',()=>p1.vy=0);
+document.getElementById('downBtn').addEventListener('touchend',()=>p1.vy=0);
+
+function resize(){const s=Math.min(480,window.innerWidth-32);canvas.style.width=s+'px';canvas.style.height=(s*320/480)+'px';}
+resize(); window.addEventListener('resize',resize);
+draw();
+</script>
+</body>
+</html>

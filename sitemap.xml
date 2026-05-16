@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/snake/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/2048/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/memory-match/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/tetris/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/breakout/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/minesweeper/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/speed-click/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/number-guess/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/color-match/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/word-quiz/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/pong/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://taka55256636.github.io/yattemIyo/game/reaction-time/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+</urlset>

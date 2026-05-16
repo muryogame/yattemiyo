@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ブロック崩し - ゲームランド</title>
+  <meta name="description" content="ボールでブロックを全部壊そう！古典的なブロック崩しゲーム。スマホ・PC対応。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #ff4b2b; }
+    .top-bar a { color:#ff4b2b; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:16px; }
+    .scoreboard { display:flex; gap:16px; margin-bottom:12px; }
+    .sb { background:#16213e; border-radius:10px; padding:8px 16px; text-align:center; border:1px solid #2a3060; }
+    .sb-label { font-size:0.65rem; color:#888; }
+    .sb-val { font-size:1.3rem; font-weight:900; color:#ff6b35; }
+    canvas#gc { border:3px solid #ff4b2b; border-radius:6px; display:block; max-width:100%; box-shadow:0 0 20px rgba(255,75,43,0.3); }
+    .canvas-wrap { position:relative; }
+    .overlay-b { position:absolute; inset:0; background:rgba(0,0,0,0.75); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; border-radius:6px; }
+    .overlay-b h2 { font-size:1.8rem; }
+    .game-btn { padding:12px 32px; border:none; border-radius:24px; background:linear-gradient(135deg,#ff416c,#ff4b2b); color:#fff; font-size:1rem; font-weight:700; cursor:pointer; }
+    .hint { color:#888; font-size:0.8rem; margin-top:12px; text-align:center; }
+    .lives { display:flex; gap:4px; font-size:1.2rem; }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>🏓 ブロック崩し</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+  <div class="scoreboard">
+    <div class="sb"><div class="sb-label">スコア</div><div class="sb-val" id="score">0</div></div>
+    <div class="sb"><div class="sb-label">ベスト</div><div class="sb-val" id="best">0</div></div>
+    <div class="sb"><div class="sb-label">残機</div><div class="sb-val"><span class="lives" id="lives">❤️❤️❤️</span></div></div>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="gc" width="400" height="500"></canvas>
+    <div class="overlay-b" id="overlay">
+      <h2>🏓 ブロック崩し</h2>
+      <p style="color:#888">マウスかタッチで操作</p>
+      <button class="game-btn" onclick="startGame()">スタート！</button>
+    </div>
+  </div>
+  <p class="hint">マウスを動かしてパドルを操作。スマホはタッチでスライド！</p>
+</main>
+<div class="ad-banner">広告</div>
+
+<script>
+const canvas = document.getElementById('gc');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let score, best, lives, running, animId;
+let paddle = {x:W/2-40, w:80, h:12, y:H-30, speed:0};
+let ball = {x:W/2, y:H-50, dx:3, dy:-4, r:8};
+let blocks = [];
+const ROWS=6, COLS_B=8;
+const bW=(W-40)/COLS_B, bH=22;
+const COLORS_B=['#ff6b6b','#feca57','#48dbfb','#ff9ff3','#1dd1a1','#ff9f43'];
+let level=1;
+
+function makeBricks(lv) {
+  blocks=[];
+  for(let r=0;r<Math.min(ROWS,ROWS+Math.floor(lv/2));r++) {
+    for(let c=0;c<COLS_B;c++) {
+      const hp = r<2?2:1;
+      blocks.push({x:20+c*bW, y:60+r*(bH+4), w:bW-4, h:bH, alive:true, hp, maxHp:hp, color:COLORS_B[r%COLORS_B.length]});
+    }
+  }
+}
+
+function startGame() {
+  score=0; lives=3; level=1; running=true;
+  best=parseInt(localStorage.getItem('breakout_best')||'0');
+  document.getElementById('best').textContent=best;
+  document.getElementById('overlay').style.display='none';
+  resetBall(); makeBricks(level); updateUI();
+  cancelAnimationFrame(animId);
+  loop();
+}
+
+function resetBall() {
+  ball={x:W/2, y:H-50, dx:3*(Math.random()>0.5?1:-1), dy:-4, r:8};
+  paddle={x:W/2-40, w:80, h:12, y:H-30, speed:0};
+}
+
+function loop() {
+  update(); draw();
+  animId = requestAnimationFrame(loop);
+}
+
+function update() {
+  if(!running) return;
+  ball.x+=ball.dx; ball.y+=ball.dy;
+  // Walls
+  if(ball.x-ball.r<0){ball.x=ball.r;ball.dx*=-1;}
+  if(ball.x+ball.r>W){ball.x=W-ball.r;ball.dx*=-1;}
+  if(ball.y-ball.r<0){ball.y=ball.r;ball.dy*=-1;}
+  // Floor
+  if(ball.y+ball.r>H){loseLife();return;}
+  // Paddle
+  if(ball.dy>0&&ball.y+ball.r>=paddle.y&&ball.y+ball.r<=paddle.y+paddle.h&&ball.x>=paddle.x&&ball.x<=paddle.x+paddle.w){
+    ball.dy=-Math.abs(ball.dy);
+    ball.dx+=((ball.x-paddle.x-paddle.w/2)/paddle.w)*3;
+    ball.dx=Math.max(-6,Math.min(6,ball.dx));
+  }
+  // Blocks
+  blocks.forEach(b=>{
+    if(!b.alive) return;
+    if(ball.x+ball.r>b.x&&ball.x-ball.r<b.x+b.w&&ball.y+ball.r>b.y&&ball.y-ball.r<b.y+b.h){
+      b.hp--; if(b.hp<=0){b.alive=false;score+=10*level;}
+      ball.dy*=-1;
+      updateUI();
+    }
+  });
+  if(blocks.every(b=>!b.alive)){level++;makeBricks(level);resetBall();}
+}
+
+function loseLife() {
+  lives--;
+  document.getElementById('lives').textContent='❤️'.repeat(Math.max(0,lives))+'🖤'.repeat(Math.max(0,3-lives));
+  if(lives<=0){
+    running=false; cancelAnimationFrame(animId);
+    if(score>best){best=score;localStorage.setItem('breakout_best',best);}
+    const ov=document.getElementById('overlay');
+    ov.style.display='flex';
+    ov.innerHTML=`<h2>💥 ゲームオーバー</h2><p>スコア: <strong>${score}</strong></p><button class="game-btn" onclick="startGame()">もう一度！</button>`;
+  } else { resetBall(); }
+}
+
+function updateUI() {
+  document.getElementById('score').textContent=score;
+  document.getElementById('best').textContent=best;
+}
+
+function draw() {
+  ctx.fillStyle='#0d0d1a'; ctx.fillRect(0,0,W,H);
+  // Blocks
+  blocks.forEach(b=>{
+    if(!b.alive) return;
+    const alpha=b.hp/b.maxHp;
+    ctx.fillStyle=b.color; ctx.globalAlpha=0.5+alpha*0.5;
+    ctx.beginPath(); ctx.roundRect(b.x,b.y,b.w,b.h,4); ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.strokeRect(b.x,b.y,b.w,b.h);
+    if(b.maxHp>1&&b.hp>0){ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText('★',b.x+b.w/2,b.y+b.h/2+4);}
+  });
+  // Ball glow
+  const grad=ctx.createRadialGradient(ball.x,ball.y,0,ball.x,ball.y,ball.r*2);
+  grad.addColorStop(0,'rgba(255,107,107,0.6)'); grad.addColorStop(1,'transparent');
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r*2,0,Math.PI*2); ctx.fill();
+  // Ball
+  ctx.fillStyle='#ff6b6b'; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(ball.x-2,ball.y-2,ball.r*0.4,0,Math.PI*2); ctx.fill();
+  // Paddle
+  const pg=ctx.createLinearGradient(paddle.x,paddle.y,paddle.x,paddle.y+paddle.h);
+  pg.addColorStop(0,'#ff4b2b'); pg.addColorStop(1,'#ff6b35');
+  ctx.fillStyle=pg; ctx.beginPath(); ctx.roundRect(paddle.x,paddle.y,paddle.w,paddle.h,6); ctx.fill();
+}
+
+// Mouse
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  const x=(e.clientX-r.left)*(W/r.width);
+  paddle.x=Math.max(0,Math.min(W-paddle.w,x-paddle.w/2));
+});
+// Touch
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect();
+  const x=(e.touches[0].clientX-r.left)*(W/r.width);
+  paddle.x=Math.max(0,Math.min(W-paddle.w,x-paddle.w/2));
+},{passive:false});
+
+function resize(){const s=Math.min(400,window.innerWidth-32);canvas.style.width=s+'px';canvas.style.height=(s*1.25)+'px';}
+resize(); window.addEventListener('resize',resize);
+draw();
+</script>
+</body>
+</html>

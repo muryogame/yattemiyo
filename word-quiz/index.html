@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ワードクイズ - ゲームランド</title>
+  <meta name="description" content="知識を試すクイズゲーム！雑学・常識・ことわざなど様々なジャンルで出題。全年齢向け。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #3498db; }
+    .top-bar a { color:#3498db; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:20px; }
+    .game-card { background:#16213e; border-radius:20px; padding:24px; width:min(520px,100%); border:2px solid #2a3060; }
+    .top-stats { display:flex; gap:12px; margin-bottom:16px; justify-content:center; }
+    .stat { background:#0f3460; border-radius:10px; padding:8px 14px; text-align:center; }
+    .stat-v { font-size:1.2rem; font-weight:900; color:#3498db; }
+    .stat-l { font-size:0.65rem; color:#888; }
+    .progress-bar { height:6px; background:#0a1030; border-radius:3px; margin-bottom:16px; overflow:hidden; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,#3498db,#9b59b6); border-radius:3px; transition:width 0.3s; }
+    .category-tag { display:inline-block; padding:3px 10px; border-radius:10px; background:rgba(52,152,219,0.2); border:1px solid #3498db; font-size:0.72rem; color:#3498db; margin-bottom:12px; }
+    .question { font-size:1.1rem; font-weight:600; line-height:1.6; margin-bottom:20px; min-height:60px; }
+    .options { display:flex; flex-direction:column; gap:10px; }
+    .opt-btn {
+      padding:14px 18px; border-radius:12px; border:2px solid #2a3060;
+      background:#0f3460; color:#e0e0e0; font-size:0.95rem; text-align:left;
+      cursor:pointer; transition:all 0.2s; line-height:1.4;
+    }
+    .opt-btn:hover { border-color:#3498db; background:rgba(52,152,219,0.1); }
+    .opt-btn.correct { background:rgba(46,204,113,0.2); border-color:#2ecc71; color:#2ecc71; }
+    .opt-btn.wrong { background:rgba(231,76,60,0.2); border-color:#e74c3c; color:#e74c3c; }
+    .opt-btn.reveal { background:rgba(46,204,113,0.1); border-color:#2ecc71; color:#888; }
+    .explanation { background:#0a3040; border-radius:10px; padding:12px; font-size:0.85rem; color:#aaa; line-height:1.6; margin-top:12px; display:none; border-left:3px solid #3498db; }
+    .nav-row { display:flex; gap:10px; justify-content:center; margin-top:16px; }
+    .game-btn { padding:12px 28px; border:none; border-radius:24px; background:linear-gradient(135deg,#2c3e50,#3498db); color:#fff; font-size:0.95rem; font-weight:700; cursor:pointer; }
+    .q-num { color:#888; font-size:0.8rem; text-align:right; margin-bottom:8px; }
+    .result-card { text-align:center; }
+    .result-card h2 { font-size:2rem; margin:16px 0; }
+    .result-score { font-size:3rem; font-weight:900; color:#3498db; }
+    .cat-sel { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+    .cat-chip { padding:5px 12px; border-radius:12px; border:1px solid #333; background:transparent; color:#888; cursor:pointer; font-size:0.78rem; }
+    .cat-chip.active { border-color:#3498db; color:#fff; background:rgba(52,152,219,0.2); }
+  </style>
+</head>
+<body>
+<div class="top-bar"><a href="../">← ゲーム一覧</a><h1>📝 ワードクイズ</h1></div>
+<div class="ad-banner">広告</div>
+<main>
+<div class="game-card" id="mainCard">
+  <div class="top-stats">
+    <div class="stat"><div class="stat-v" id="scoreD">0</div><div class="stat-l">正解数</div></div>
+    <div class="stat"><div class="stat-v" id="totalD">0</div><div class="stat-l">出題数</div></div>
+    <div class="stat"><div class="stat-v" id="streakD">0</div><div class="stat-l">連続正解</div></div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
+  <div class="cat-sel" id="catSel"></div>
+  <div class="category-tag" id="catTag">カテゴリ</div>
+  <div class="q-num" id="qNum">問題 1 / 10</div>
+  <div class="question" id="question">クイズを始めよう！</div>
+  <div class="options" id="options"></div>
+  <div class="explanation" id="explanation"></div>
+  <div class="nav-row">
+    <button class="game-btn" id="nextBtn" style="display:none" onclick="nextQuestion()">次の問題 →</button>
+    <button class="game-btn" onclick="startQuiz()">🔄 スタート</button>
+  </div>
+</div>
+</main>
+<div class="ad-banner">広告</div>
+
+<script>
+const QUESTIONS = [
+  {cat:'動物',q:'世界で一番大きな動物は？',opts:['シロナガスクジラ','ゾウ','キリン','ホホジロザメ'],ans:0,exp:'シロナガスクジラは体長最大34m、体重190tにもなる地球史上最大の動物です。'},
+  {cat:'地理',q:'日本で一番高い山は？',opts:['富士山','北岳','穂高岳','白馬岳'],ans:0,exp:'富士山は標高3776mで日本最高峰。ユネスコ世界文化遺産にも登録されています。'},
+  {cat:'科学',q:'光の速さはおよそ毎秒何km？',opts:['30万km','3万km','3000km','300km'],ans:0,exp:'光速はおよそ秒速299,792km（約30万km）。1秒で地球を約7.5周できます。'},
+  {cat:'歴史',q:'江戸幕府を開いたのは誰？',opts:['徳川家康','徳川秀忠','豊臣秀吉','織田信長'],ans:0,exp:'徳川家康は1603年に江戸幕府を開きました。以降約260年間続きました。'},
+  {cat:'算数',q:'1から10までの数字を全部たすといくつ？',opts:['55','45','50','60'],ans:0,exp:'1+2+3+…+10 = (1+10)×10÷2 = 55です。'},
+  {cat:'スポーツ',q:'サッカーの試合で1チームは何人でプレー？',opts:['11人','10人','9人','12人'],ans:0,exp:'サッカーは1チーム11人、計22人がフィールドでプレーします。'},
+  {cat:'自然',q:'雷が光ってから音が聞こえるまで3秒かかった。雷は何km先？',opts:['約1km','約3km','約5km','約10km'],ans:0,exp:'音の速さは約340m/秒。3秒×340m=1020m≒約1kmです。'},
+  {cat:'日本語',q:'「七転び八起き」の意味は？',opts:['何度失敗しても立ち上がる','七回転んだら終わり','幸運が8回来る','粘り強く待つ'],ans:0,exp:'七転び八起きとは、何度失敗しても諦めずに立ち直ることを意味することわざです。'},
+  {cat:'食べ物',q:'チョコレートの原料となる植物は？',opts:['カカオ','コーヒー','バニラ','シナモン'],ans:0,exp:'チョコレートはカカオの種子（カカオ豆）から作られます。'},
+  {cat:'宇宙',q:'太陽系で一番大きな惑星は？',opts:['木星','土星','海王星','天王星'],ans:0,exp:'木星は直径約14万kmで太陽系最大。地球が約1321個入るほどの大きさです。'},
+  {cat:'動物',q:'ペンギンが住んでいる地域は？',opts:['南極','北極','アフリカ赤道付近','北欧'],ans:0,exp:'ペンギンは南半球に分布。南極のほかガラパゴス諸島にも生息します（北極にはいません）。'},
+  {cat:'科学',q:'水の化学式は？',opts:['H₂O','CO₂','O₂','H₂'],ans:0,exp:'水はH₂O（水素2個・酸素1個）。CO₂は二酸化炭素です。'},
+  {cat:'地理',q:'ナイル川は何大陸を流れる？',opts:['アフリカ','アジア','南アメリカ','ヨーロッパ'],ans:0,exp:'ナイル川は全長6650kmでアフリカ大陸最長の川です。'},
+  {cat:'歴史',q:'オリンピックが初めて開かれた国は？',opts:['ギリシャ','フランス','イギリス','アメリカ'],ans:0,exp:'近代オリンピック第1回は1896年、ギリシャのアテネで開催されました。'},
+  {cat:'体',q:'人体で一番長い骨は？',opts:['大腿骨（太もも）','背骨','脛骨','腕骨'],ans:0,exp:'大腿骨（太ももの骨）は体の中で最も長く、平均約45cmあります。'},
+  {cat:'自然',q:'日本で地震が多い理由は？',opts:['4つのプレートの交差点','火山が多いから','海に囲まれているから','島国だから'],ans:0,exp:'日本はユーラシア、北アメリカ、太平洋、フィリピン海の4枚のプレートが交わる場所にあります。'},
+  {cat:'算数',q:'2の10乗（2¹⁰）はいくつ？',opts:['1024','512','2048','256'],ans:0,exp:'2¹⁰=1024。コンピュータでよく使う「1KB=1024バイト」はここから来ています。'},
+  {cat:'スポーツ',q:'野球で打者が打てないまま3アウトになるのを何という？',opts:['三振','ストライク','ファウル','アウト'],ans:0,exp:'3球続けてストライクを取られることを三振といいます。'},
+  {cat:'日本語',q:'「雨垂れ石を穿つ」の意味は？',opts:['継続は力なり','雨が石を壊す','水は強い','諦めが肝心'],ans:0,exp:'小さな雨粒でも何度も落ち続ければ石に穴があく→継続は力なり、という意味のことわざです。'},
+  {cat:'宇宙',q:'地球から一番近い星（太陽を除く）は？',opts:['プロキシマ・ケンタウリ','シリウス','ベガ','アンタレス'],ans:0,exp:'プロキシマ・ケンタウリは約4.2光年先にある太陽系に最も近い恒星です。'},
+];
+
+let qList, qIndex, score, streak, selectedCat='all';
+
+function buildCatSel() {
+  const cats=['all',...new Set(QUESTIONS.map(q=>q.cat))];
+  const sel=document.getElementById('catSel');
+  sel.innerHTML='';
+  cats.forEach(c=>{
+    const b=document.createElement('button'); b.className='cat-chip'+(c===selectedCat?' active':'');
+    b.textContent=c==='all'?'すべて':c;
+    b.onclick=()=>{selectedCat=c;document.querySelectorAll('.cat-chip').forEach(x=>x.classList.remove('active'));b.classList.add('active');startQuiz();};
+    sel.appendChild(b);
+  });
+}
+
+function startQuiz() {
+  const pool=selectedCat==='all'?QUESTIONS:QUESTIONS.filter(q=>q.cat===selectedCat);
+  qList=[...pool].sort(()=>Math.random()-0.5).slice(0,10);
+  qIndex=0; score=0; streak=0;
+  document.getElementById('nextBtn').style.display='none';
+  showQuestion();
+}
+
+function showQuestion() {
+  const q=qList[qIndex];
+  document.getElementById('catTag').textContent=q.cat;
+  document.getElementById('qNum').textContent=`問題 ${qIndex+1} / ${qList.length}`;
+  document.getElementById('question').textContent=q.q;
+  document.getElementById('explanation').style.display='none';
+  document.getElementById('explanation').textContent='';
+  document.getElementById('progFill').style.width=((qIndex/qList.length)*100)+'%';
+  updateStats();
+  const opts=document.getElementById('options');
+  opts.innerHTML='';
+  // Shuffle options (keeping track of correct idx)
+  const shuffled=[...q.opts.map((o,i)=>({o,correct:i===q.ans}))].sort(()=>Math.random()-0.5);
+  shuffled.forEach(({o,correct})=>{
+    const b=document.createElement('button'); b.className='opt-btn'; b.textContent=o;
+    b.onclick=()=>answer(b,correct,shuffled,q.exp);
+    opts.appendChild(b);
+  });
+  document.getElementById('nextBtn').style.display='none';
+}
+
+function answer(btn, correct, shuffled, exp) {
+  document.querySelectorAll('.opt-btn').forEach(b=>b.onclick=null);
+  if(correct){
+    btn.classList.add('correct'); score++; streak++;
+  } else {
+    btn.classList.add('wrong'); streak=0;
+    document.querySelectorAll('.opt-btn').forEach(b=>{
+      if(b.textContent===shuffled.find(s=>s.correct).o) b.classList.add('reveal');
+    });
+  }
+  const expEl=document.getElementById('explanation');
+  expEl.textContent='💡 '+exp; expEl.style.display='block';
+  updateStats();
+  if(qIndex<qList.length-1){
+    document.getElementById('nextBtn').style.display='inline-block';
+  } else {
+    setTimeout(showResult,1000);
+  }
+}
+
+function nextQuestion() {
+  qIndex++;
+  showQuestion();
+}
+
+function showResult() {
+  const pct=Math.round((score/qList.length)*100);
+  const grade=pct>=90?'🏆 完璧！':pct>=70?'⭐ 優秀！':pct>=50?'😊 まずまず':pct>=30?'😅 もう少し':'😢 がんばろう！';
+  document.getElementById('mainCard').innerHTML=`
+    <div class="result-card">
+      <h2>${grade}</h2>
+      <div class="result-score">${score} / ${qList.length}</div>
+      <p style="color:#888;margin:12px 0">${pct}%正解</p>
+      <div class="nav-row" style="margin-top:20px">
+        <button class="game-btn" onclick="location.reload()">もう一度！</button>
+      </div>
+    </div>`;
+}
+
+function updateStats() {
+  document.getElementById('scoreD').textContent=score;
+  document.getElementById('totalD').textContent=qIndex+1;
+  document.getElementById('streakD').textContent=streak;
+}
+
+buildCatSel(); startQuiz();
+</script>
+</body>
+</html>

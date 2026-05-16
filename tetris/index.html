@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テトリス風ゲーム - ゲームランド</title>
+  <meta name="description" content="落ちてくるブロックを積み上げるテトリス風ゲーム！ラインを消してハイスコアを目指せ。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+    .top-bar { background:#16213e; padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:2px solid #00b4d8; }
+    .top-bar a { color:#00b4d8; text-decoration:none; font-size:0.9rem; }
+    .top-bar h1 { font-size:1.1rem; flex:1; }
+    .ad-banner { background:#0f3460; border:1px dashed #333; text-align:center; padding:8px; font-size:0.7rem; color:#555; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; padding:16px; }
+    .game-layout { display:flex; gap:16px; align-items:flex-start; }
+    .side-panel { display:flex; flex-direction:column; gap:12px; min-width:100px; }
+    .panel-box { background:#16213e; border-radius:10px; padding:12px; border:1px solid #2a3060; }
+    .panel-label { font-size:0.65rem; color:#888; text-transform:uppercase; margin-bottom:4px; }
+    .panel-value { font-size:1.4rem; font-weight:900; color:#00b4d8; }
+    #nextCanvas { border:2px solid #2a3060; border-radius:6px; display:block; }
+    canvas#gameCanvas { border:3px solid #00b4d8; border-radius:6px; box-shadow:0 0 20px rgba(0,180,216,0.3); display:block; }
+    .controls-mobile { display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:12px; }
+    .btn-row { display:flex; gap:6px; }
+    .ctrl-btn { width:52px; height:52px; border:none; border-radius:10px; background:#16213e; color:#fff; font-size:1.3rem; cursor:pointer; border:2px solid #2a3060; }
+    .ctrl-btn:active { background:#00b4d8; }
+    .game-btn { margin:8px 0; padding:10px 28px; border:none; border-radius:24px; background:linear-gradient(135deg,#1a1aff,#00b4d8); color:#fff; font-size:0.95rem; font-weight:700; cursor:pointer; }
+    .hint { color:#888; font-size:0.75rem; text-align:center; margin-top:6px; }
+    .overlay-t { position:absolute; inset:0; background:rgba(0,0,0,0.75); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; border-radius:6px; }
+    .canvas-wrap { position:relative; }
+    .overlay-t h2 { font-size:1.8rem; }
+  </style>
+</head>
+<body>
+<div class="top-bar">
+  <a href="../">← ゲーム一覧</a>
+  <h1>🧱 テトリス風ゲーム</h1>
+</div>
+<div class="ad-banner">広告</div>
+<main>
+  <div class="game-layout">
+    <div class="side-panel">
+      <div class="panel-box"><div class="panel-label">スコア</div><div class="panel-value" id="score">0</div></div>
+      <div class="panel-box"><div class="panel-label">ライン</div><div class="panel-value" id="lines">0</div></div>
+      <div class="panel-box"><div class="panel-label">レベル</div><div class="panel-value" id="level">1</div></div>
+      <div class="panel-box">
+        <div class="panel-label">次のブロック</div>
+        <canvas id="nextCanvas" width="80" height="80"></canvas>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="gameCanvas" width="200" height="400"></canvas>
+      <div class="overlay-t" id="overlay">
+        <h2>🧱 テトリス</h2>
+        <p style="color:#888">矢印キーで操作</p>
+        <button class="game-btn" onclick="startGame()">スタート！</button>
+      </div>
+    </div>
+  </div>
+  <div class="controls-mobile">
+    <div class="btn-row"><button class="ctrl-btn" onclick="rotatePiece()">🔄</button></div>
+    <div class="btn-row">
+      <button class="ctrl-btn" onclick="moveLeft()">⬅</button>
+      <button class="ctrl-btn" onclick="softDrop()">⬇</button>
+      <button class="ctrl-btn" onclick="moveRight()">➡</button>
+    </div>
+    <div class="btn-row"><button class="ctrl-btn" onclick="hardDrop()">⏬</button></div>
+  </div>
+  <p class="hint">← → 移動 / ↑ 回転 / ↓ 落下 / Space ハードドロップ</p>
+</main>
+<div class="ad-banner">広告</div>
+
+<script>
+const C = document.getElementById('gameCanvas').getContext('2d');
+const NC = document.getElementById('nextCanvas').getContext('2d');
+const COLS=10, ROWS=20, BS=20;
+const COLORS=['','#00b4d8','#ffd60a','#7b2fbe','#06d6a0','#ef233c','#ff6b35','#4cc9f0'];
+const PIECES=[
+  [],
+  [[1,1,1,1]],
+  [[2,2],[2,2]],
+  [[0,3,0],[3,3,3]],
+  [[4,0],[4,0],[4,4]],
+  [[0,5],[0,5],[5,5]],
+  [[6,0],[6,6],[0,6]],
+  [[0,7],[7,7],[7,0]]
+];
+
+let board, piece, pieceX, pieceY, nextPiece, score, lines, level, gameRunning, dropTimer, dropInterval;
+
+function newBoard() { return Array.from({length:ROWS},()=>Array(COLS).fill(0)); }
+
+function randomPiece() {
+  const id = Math.floor(Math.random()*7)+1;
+  return {id, shape:PIECES[id].map(r=>[...r])};
+}
+
+function startGame() {
+  board = newBoard();
+  score=0; lines=0; level=1; gameRunning=true;
+  piece=randomPiece(); pieceX=3; pieceY=0;
+  nextPiece=randomPiece();
+  document.getElementById('overlay').style.display='none';
+  clearInterval(dropTimer);
+  dropInterval=800;
+  dropTimer=setInterval(()=>{if(!moveDown())lockPiece();},dropInterval);
+  updateUI();
+  draw();
+}
+
+function canMove(shape,ox,oy) {
+  for(let r=0;r<shape.length;r++) for(let c=0;c<shape[r].length;c++) {
+    if(!shape[r][c]) continue;
+    const nx=ox+c, ny=oy+r;
+    if(nx<0||nx>=COLS||ny>=ROWS) return false;
+    if(ny>=0&&board[ny][nx]) return false;
+  }
+  return true;
+}
+
+function moveDown() {
+  if(canMove(piece.shape,pieceX,pieceY+1)){pieceY++;draw();return true;}
+  return false;
+}
+function moveLeft(){if(canMove(piece.shape,pieceX-1,pieceY)){pieceX--;draw();}}
+function moveRight(){if(canMove(piece.shape,pieceX+1,pieceY)){pieceX++;draw();}}
+function softDrop(){if(!moveDown())lockPiece();}
+function hardDrop(){while(moveDown());lockPiece();}
+
+function rotatePiece() {
+  const rotated=piece.shape[0].map((_,i)=>piece.shape.map(r=>r[i]).reverse());
+  if(canMove(rotated,pieceX,pieceY)){piece.shape=rotated;draw();}
+  else if(canMove(rotated,pieceX-1,pieceY)){pieceX--;piece.shape=rotated;draw();}
+  else if(canMove(rotated,pieceX+1,pieceY)){pieceX++;piece.shape=rotated;draw();}
+}
+
+function lockPiece() {
+  piece.shape.forEach((r,ri)=>r.forEach((v,ci)=>{
+    if(v&&pieceY+ri>=0) board[pieceY+ri][pieceX+ci]=piece.id;
+  }));
+  clearLines();
+  piece=nextPiece; pieceX=3; pieceY=0;
+  nextPiece=randomPiece();
+  if(!canMove(piece.shape,pieceX,pieceY)){gameOver();return;}
+  drawNext();
+  draw();
+}
+
+function clearLines() {
+  let cleared=0;
+  for(let r=ROWS-1;r>=0;r--) {
+    if(board[r].every(v=>v)){board.splice(r,1);board.unshift(Array(COLS).fill(0));cleared++;r++;}
+  }
+  if(cleared){
+    const pts=[0,100,300,500,800];
+    score+=pts[cleared]*level;
+    lines+=cleared;
+    level=Math.floor(lines/10)+1;
+    clearInterval(dropTimer);
+    dropInterval=Math.max(100,800-level*70);
+    dropTimer=setInterval(()=>{if(!moveDown())lockPiece();},dropInterval);
+    updateUI();
+  }
+}
+
+function gameOver(){
+  gameRunning=false;clearInterval(dropTimer);
+  const ov=document.getElementById('overlay');
+  ov.style.display='flex';
+  ov.innerHTML=`<h2>💀 ゲームオーバー</h2><p>スコア: <strong>${score}</strong> / ${lines}ライン</p><button class="game-btn" onclick="startGame()">もう一度！</button>`;
+}
+
+function draw() {
+  C.fillStyle='#0d0d1a'; C.fillRect(0,0,200,400);
+  board.forEach((r,ri)=>r.forEach((v,ci)=>{
+    if(v){C.fillStyle=COLORS[v];C.fillRect(ci*BS+1,ri*BS+1,BS-2,BS-2);C.fillStyle='rgba(255,255,255,0.2)';C.fillRect(ci*BS+1,ri*BS+1,BS-2,4);}
+  }));
+  // Ghost
+  let ghost=pieceY;
+  while(canMove(piece.shape,pieceX,ghost+1))ghost++;
+  piece.shape.forEach((r,ri)=>r.forEach((v,ci)=>{
+    if(v){C.fillStyle='rgba(255,255,255,0.1)';C.fillRect((pieceX+ci)*BS+1,(ghost+ri)*BS+1,BS-2,BS-2);}
+  }));
+  piece.shape.forEach((r,ri)=>r.forEach((v,ci)=>{
+    if(v){C.fillStyle=COLORS[piece.id];C.fillRect((pieceX+ci)*BS+1,(pieceY+ri)*BS+1,BS-2,BS-2);C.fillStyle='rgba(255,255,255,0.3)';C.fillRect((pieceX+ci)*BS+1,(pieceY+ri)*BS+1,BS-2,4);}
+  }));
+}
+
+function drawNext() {
+  NC.fillStyle='#16213e'; NC.fillRect(0,0,80,80);
+  const s=nextPiece.shape, off=Math.floor((4-s[0].length)/2)*16+8;
+  const oy=Math.floor((4-s.length)/2)*16+8;
+  s.forEach((r,ri)=>r.forEach((v,ci)=>{
+    if(v){NC.fillStyle=COLORS[nextPiece.id];NC.fillRect(off+ci*16+1,oy+ri*16+1,14,14);}
+  }));
+}
+
+function updateUI(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('lines').textContent=lines;
+  document.getElementById('level').textContent=level;
+}
+
+document.addEventListener('keydown',e=>{
+  if(!gameRunning)return;
+  if(e.key==='ArrowLeft'){e.preventDefault();moveLeft();}
+  if(e.key==='ArrowRight'){e.preventDefault();moveRight();}
+  if(e.key==='ArrowDown'){e.preventDefault();softDrop();}
+  if(e.key==='ArrowUp'){e.preventDefault();rotatePiece();}
+  if(e.key===' '){e.preventDefault();hardDrop();}
+});
+</script>
+</body>
+</html>
