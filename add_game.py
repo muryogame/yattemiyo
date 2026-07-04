@@ -105,6 +105,9 @@ def game_card_html(g):
 
 def update_index(game):
     content = INDEX_FILE.read_text(encoding="utf-8")
+    if f'href="{game["id"]}/"' in content:
+        print(f"index.html already contains: {game['title']}, skipping")
+        return
     card = game_card_html(game)
     # Insert before closing </div> of games-grid
     marker = "  </div>\n\n  <!-- Ad mid -->"
