@@ -148,6 +148,15 @@ def create_game_file(game):
     print(f"Created: {html_file}")
 
 
+def is_game_deployed(game):
+    """Check if a game already exists on the filesystem and in index.html."""
+    game_html = GAME_DIR / game["id"] / "index.html"
+    if not game_html.exists():
+        return False
+    content = INDEX_FILE.read_text(encoding="utf-8")
+    return f'href="{game["id"]}/"' in content
+
+
 def main():
     log = load_log()
     today = datetime.date.today().isoformat()
@@ -156,8 +165,14 @@ def main():
         print(f"Already ran today ({today}). Skipping.")
         return
 
-    # Find next game to add
+    # Pre-populate added_ids from filesystem when log is empty (fresh container)
     added_ids = set(log["added"])
+    for g in SCHEDULED_GAMES:
+        if g["id"] not in added_ids and is_game_deployed(g):
+            added_ids.add(g["id"])
+            log["added"].append(g["id"])
+
+    # Find next game to add
     next_game = None
     for g in SCHEDULED_GAMES:
         if g["id"] not in added_ids:
